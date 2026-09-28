@@ -16,6 +16,7 @@ import {
   retakeStage,
   rescheduleRound1,
   dropStage,
+  getFormResponse,
 } from "@/lib/actions/leads-actions";
 import { fmtSlot } from "@/lib/format";
 import { RescheduleChip } from "@/components/reschedule-chip";
@@ -107,6 +108,7 @@ export function LeadDetailClient({ id, userEmail }: { id: string; userEmail: str
   const qc = useQueryClient();
   const router = useRouter();
   const leadQ = useQuery({ queryKey: ["lead", id], queryFn: () => getLead({ id }) });
+  const formQ = useQuery({ queryKey: ["form-response", id], queryFn: () => getFormResponse({ lead_id: id }), staleTime: 5 * 60_000 });
 
   function goBack() {
     router.back();
@@ -162,6 +164,12 @@ export function LeadDetailClient({ id, userEmail }: { id: string; userEmail: str
             <h1 className="text-xl font-bold tracking-tight text-foreground">{data.lead.name}</h1>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
               <span className="tabular-nums">{formatContact(data.lead.contact)}</span>
+              {data.lead.email && (
+                <>
+                  <span>·</span>
+                  <span className="break-all">{data.lead.email}</span>
+                </>
+              )}
               <span>·</span>
               <span>{data.lead.source ?? "Direct"}</span>
               {data.lead.lead_date && (
@@ -171,9 +179,10 @@ export function LeadDetailClient({ id, userEmail }: { id: string; userEmail: str
                 </>
               )}
             </div>
-            {data.profile?.expert_id && (
-              <div className="mt-2">
-                <Badge variant="secondary">Expert ID: {data.profile.expert_id}</Badge>
+            {(data.profile?.expert_id || formQ.data) && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {data.profile?.expert_id && <Badge variant="secondary">Expert ID: {data.profile.expert_id}</Badge>}
+                {formQ.data && <FormResponseDialog entries={formQ.data} />}
               </div>
             )}
           </div>
@@ -189,6 +198,36 @@ export function LeadDetailClient({ id, userEmail }: { id: string; userEmail: str
         <LeadTimeline data={data} onChanged={refresh} />
       </div>
     </div>
+  );
+}
+
+/** "View Google Form" chip → read-only list of every question/answer captured at intake. */
+function FormResponseDialog({ entries }: { entries: Array<{ question: string; answer: string }> }) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center rounded-md border border-border bg-background px-2 py-0.5 text-xs font-medium text-primary hover:bg-accent"
+        >
+          View Google Form
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Google Form response</DialogTitle>
+          <DialogDescription>Text answers captured when this lead was submitted. File uploads aren&apos;t included.</DialogDescription>
+        </DialogHeader>
+        <dl className="-mx-6 max-h-[65vh] divide-y divide-border overflow-y-auto border-t border-border">
+          {entries.map((e, i) => (
+            <div key={i} className="grid grid-cols-1 gap-1 px-6 py-2.5 text-sm sm:grid-cols-[2fr_3fr] sm:gap-4">
+              <dt className="text-muted-foreground">{e.question}</dt>
+              <dd className="whitespace-pre-wrap break-words text-foreground">{e.answer}</dd>
+            </div>
+          ))}
+        </dl>
+      </DialogContent>
+    </Dialog>
   );
 }
 

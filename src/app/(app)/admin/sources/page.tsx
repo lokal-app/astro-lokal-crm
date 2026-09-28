@@ -86,21 +86,53 @@ function detectField_(raw, fieldKey) {
   return null;
 }
 
+// ─── NEW: Full text-only response capture (excludes file/image/video uploads) ─
+function buildFullTextResponse_(e) {
+  var fullResponse = {};
+  var itemResponses = e.response.getItemResponses();
+
+  for (var i = 0; i < itemResponses.length; i++) {
+    var itemResponse = itemResponses[i];
+    var item = itemResponse.getItem();
+    var itemType = item.getType();
+
+    // Never send file/image/video upload answers — text only
+    if (itemType === FormApp.ItemType.FILE_UPLOAD) {
+      continue;
+    }
+
+    var questionText = item.getTitle();
+    var answer = itemResponse.getResponse();
+
+    if (Array.isArray(answer)) {
+      answer = answer.join(", ");
+    }
+
+    if (typeof answer === "string" && answer.trim().length > 0) {
+      fullResponse[questionText] = answer.trim();
+    }
+  }
+
+  return fullResponse;
+}
+
 // ─── Core submission logic ───────────────────────────────────────────────────
 function onFormSubmit(e) {
   var raw = getRawAnswers_(e);
   var formTitle = FormApp.getActiveForm().getTitle();
-  processSubmission_(raw, formTitle);
+  var fullResponse = buildFullTextResponse_(e); // NEW
+  processSubmission_(raw, formTitle, fullResponse); // NEW param
 }
 
-function processSubmission_(raw, formTitle) {
+function processSubmission_(raw, formTitle, fullResponse) { // NEW param
   var payload = {
     name:     detectField_(raw, "name")    || "",
     contact:  detectField_(raw, "contact") || "",
     email:    detectField_(raw, "email"),
     city:     detectField_(raw, "city"),
     language: detectField_(raw, "language"),
-    source:   SOURCE_NAME || formTitle
+    source:   SOURCE_NAME || formTitle,
+    form_response: fullResponse || {} // NEW — full text-only Q&A snapshot
   };
 
   Logger.log("Submitting payload: " + JSON.stringify(payload));
@@ -134,7 +166,9 @@ function testWithDummySubmission() {
   raw["Phone Number"] = "8888888888";
   raw["City you are currently based in"] = "Pune";
   raw["Which languages can you conduct full consultations in — both speaking and chat? (Primary Language)"] = "Marathi";
-  processSubmission_(raw, FormApp.getActiveForm().getTitle());
+  // Note: no real form event \`e\` here, so fullResponse can't be built the
+  // same way — this just sends an empty form_response: {}.
+  processSubmission_(raw, FormApp.getActiveForm().getTitle(), {});
   Logger.log("Done. Check CRM All Leads or your inbox if it failed.");
 }
 

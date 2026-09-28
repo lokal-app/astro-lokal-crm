@@ -13,6 +13,7 @@ import {
   loadLeadOwned,
 } from "@/lib/helpers";
 import { findDuplicateLead, logDuplicate, normalizeContact } from "@/lib/dedup";
+import type { FormResponseEntry } from "@/lib/intake";
 
 // ---------- Dashboard / reads ----------
 
@@ -103,6 +104,23 @@ export async function getLead(input: { id: string }) {
     cfg: { num_rounds },
     names,
   };
+}
+
+/**
+ * The Google Form Q&A captured at intake for this lead, in form order, or
+ * null if none (older leads, manual/CSV adds, forms on the old script).
+ * TODO(ops): rows older than 1 YEAR should be removed by a scheduled cleanup
+ * job — see the note in lib/intake.ts; no automatic deletion here.
+ */
+export async function getFormResponse(input: { lead_id: string }): Promise<FormResponseEntry[] | null> {
+  const { lead_id } = z.object({ lead_id: z.string().uuid() }).parse(input);
+  await requireUser();
+  const { rows } = await pool.query<{ response: unknown }>(
+    `SELECT response FROM form_responses WHERE lead_id = $1 ORDER BY submitted_at DESC LIMIT 1`,
+    [lead_id],
+  );
+  const response = rows[0]?.response;
+  return Array.isArray(response) && response.length > 0 ? (response as FormResponseEntry[]) : null;
 }
 
 export async function getPool(input: { stage: string }) {

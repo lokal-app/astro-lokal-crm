@@ -29,6 +29,30 @@ function optStr(v: unknown): string | null {
   return str(v) || null;
 }
 
+/** One question/answer pair from a Google Form submission, in form order. */
+export type FormResponseEntry = { question: string; answer: string };
+
+// Max pairs kept per submission — a guard against oversized payloads, well
+// above any real form.
+const MAX_FORM_RESPONSE_ENTRIES = 300;
+
+/**
+ * Normalises the Apps Script's optional `form_response` object ({ question:
+ * answer }, text answers only) into an ordered array. Stored as an array, not
+ * the object as-is, because JSONB re-sorts object keys and the form's
+ * question order would be lost. Non-string/empty answers are dropped.
+ */
+function parseFormResponse(v: unknown): FormResponseEntry[] {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return [];
+  const entries: FormResponseEntry[] = [];
+  for (const [question, answer] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof answer !== "string" || !question.trim() || !answer.trim()) continue;
+    entries.push({ question: question.trim(), answer: answer.trim() });
+    if (entries.length >= MAX_FORM_RESPONSE_ENTRIES) break;
+  }
+  return entries;
+}
+
 function generateLeadId() {
   return `REF-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 }
@@ -82,5 +106,24 @@ export async function intakeLead(payload: Record<string, unknown>): Promise<Inta
     contact: rawContact,
     name,
   });
+
+  // Full text-only Q&A snapshot from the Google Form Apps Script (new leads
+  // only — never backfilled). Best-effort: the lead is already created, so a
+  // failure here is logged and swallowed rather than failing the intake.
+  // TODO(ops): form_responses has no automatic expiry — a scheduled cleanup
+  // job should delete rows older than 1 YEAR (submitted_at < now() - interval
+  // '1 year'). Deliberately not implemented in application code.
+  const formResponse = parseFormResponse(payload.form_response);
+  if (formResponse.length > 0) {
+    try {
+      await pool.query(`INSERT INTO form_responses (lead_id, response, submitted_at) VALUES ($1, $2, now())`, [
+        inserted.id,
+        JSON.stringify(formResponse),
+      ]);
+    } catch (err) {
+      console.error(`form_responses insert failed for lead ${inserted.id}:`, err);
+    }
+  }
+
   return { kind: "created", id: inserted.id, lead_id: inserted.lead_id };
 }
