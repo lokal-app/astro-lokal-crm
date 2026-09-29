@@ -70,19 +70,41 @@ var FIELD_VARIANTS = {
 
 function detectField_(raw, fieldKey) {
   var variants = FIELD_VARIANTS[fieldKey] || [];
+
+  var rawKeys = [];
   var rawKeysLower = {};
   for (var key in raw) {
     if (Object.prototype.hasOwnProperty.call(raw, key)) {
+      rawKeys.push(key);
       rawKeysLower[key.toLowerCase().trim()] = key;
     }
   }
+
+  // Pass 1 — exact match (preferred).
   for (var i = 0; i < variants.length; i++) {
     var variant = variants[i].toLowerCase().trim();
     if (rawKeysLower[variant]) {
       var value = raw[rawKeysLower[variant]];
-      return value ? String(value).trim() : null;
+      if (value && String(value).trim()) return String(value).trim();
     }
   }
+
+  // Pass 2 — fuzzy "contains" fallback, only if no exact match was found.
+  // Catches labels like "Mobile Number (WhatsApp)" that no exact variant matches.
+  // Longest variants first, so "mobile number" wins over "mobile".
+  var byLength = variants.slice().sort(function (a, b) { return b.length - a.length; });
+
+  for (var v = 0; v < byLength.length; v++) {
+    var needle = byLength[v].toLowerCase().trim();
+    for (var k = 0; k < rawKeys.length; k++) {
+      var label = rawKeys[k].toLowerCase().trim();
+      if (label.indexOf(needle) !== -1) {
+        var val = raw[rawKeys[k]];
+        if (val && String(val).trim()) return String(val).trim();
+      }
+    }
+  }
+
   return null;
 }
 
