@@ -1,20 +1,23 @@
 # Multi-stage build for the Next.js CRM — Node 24 LTS, Alpine base.
+# Node is pinned to an exact patched release; bump it here for Node security updates.
+
+ARG NODE_VERSION=24.22.1
 
 # ---- deps: install once, cached across source-only changes ----
-FROM node:24-alpine AS deps
+FROM node:${NODE_VERSION}-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
 
 # ---- builder: compile with output: 'standalone' (next.config.mjs) ----
-FROM node:24-alpine AS builder
+FROM node:${NODE_VERSION}-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
 # ---- runner: minimal image — just the standalone server + static assets ----
-FROM node:24-alpine AS runner
+FROM node:${NODE_VERSION}-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
