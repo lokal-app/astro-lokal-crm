@@ -1,5 +1,7 @@
 # Node 24 LTS, Alpine base per spec.
-FROM node:24-alpine
+# Node is pinned to an exact patched release; bump it here for Node security updates.
+ARG NODE_VERSION=24.22.1
+FROM node:${NODE_VERSION}-alpine
 
 WORKDIR /app
 
