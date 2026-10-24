@@ -5,7 +5,7 @@
   "description": "Generic Postgres-backed Express API (intake-lead + health) — Kubernetes-ready, deployable against any Postgres-compliant database via DATABASE_URL.",
   "main": "server.js",
   "engines": {
-    "node": ">=24"
+    "node": ">=24.22.1"
   },
   "scripts": {
     "start": "node server.js",
